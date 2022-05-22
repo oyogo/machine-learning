@@ -1,0 +1,24 @@
+---
+title: "Multiple Regression"
+author: "Clinton"
+date: "4/21/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+stud_mlreg <- fread("../data/stud_perf_processed.csv")
+stud_mlreg <- stud_mlreg %>% select(-V1)
+```
+
+```{r}
+reg <- lm(G3 ~ . , data = stud_mlreg)
+reg
+summary(reg)
+
+```
+

@@ -1,0 +1,225 @@
+---
+title: "xgboost regression"
+author: "Clinton"
+date: "4/21/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(xgboost)
+```
+
+
+```{r}
+xgbreg_data <- read.csv("../data/student_performance.csv")
+```
+
+```{r}
+xgbstud_perfdata <- xgbreg_data %>% mutate(address = case_when(
+  address == "R" ~ 0,
+  address == "U" ~ 1
+),
+famsize = case_when(
+  famsize == "LE3" ~ 0,
+  famsize == "GT3" ~ 1
+),
+Pstatus = case_when(
+  Pstatus == "T" ~ 0,
+  Pstatus == "A" ~ 1
+),
+Mjob = case_when(
+  Mjob == "teacher" ~ 0,
+  Mjob == "at_home" ~ 1,
+  Mjob == "services" ~ 2,
+  Mjob == "other" ~ 3,
+  Mjob == "health" ~ 4
+),
+Fjob = case_when(
+  Fjob == "teacher" ~ 0,
+  Fjob == "at_home" ~ 1,
+  Fjob == "services" ~ 2,
+  Fjob == "other" ~ 3,
+  Fjob == "health" ~ 4
+),
+guardian = case_when(
+  guardian == "mother" ~ 0,
+  guardian == "father" ~ 1,
+  guardian == "other" ~ 2
+),
+schoolsup = case_when(
+  schoolsup == "yes" ~ 1,
+  schoolsup == "no" ~ 0
+),
+famsup = case_when(
+  famsup == "yes" ~ 1,
+  famsup == "no" ~ 0
+),
+paid = case_when(
+  paid == "no" ~ 0,
+  paid == "yes" ~ 1
+),
+activities = case_when(
+  activities == "no" ~ 0,
+  activities == "yes" ~ 1
+),
+nursery = case_when(
+  nursery == "no" ~ 0,
+  nursery == "yes" ~ 1
+),
+higher = case_when(
+  higher == "yes" ~ 1,
+  higher == "no" ~ 0
+),
+internet = case_when(
+  internet == "no" ~ 0,
+  internet == "yes" ~ 1
+),
+romantic = case_when(
+  romantic == "no" ~ 0,
+  romantic == "yes" ~ 1
+),
+sex = case_when(
+  sex == "F" ~ 0,
+  sex == "M" ~ 1
+)
+) 
+```
+
+
+```{r}
+
+xgbstud_perf <- xgbstud_perfdata %>% select(-c("G1","reason","school","X")) 
+
+```
+
+## Data partitioning  
+
+```{r}
+set.seed(42)
+
+sample_split <- sample.split(Y = xgbstud_perf$G3, SplitRatio = 0.7)
+train_set <- subset(x=xgbstud_perf, sample_split == TRUE)
+test_set <- subset(x = xgbstud_perf, sample_split == FALSE) 
+
+y_train <- train_set$G3
+y_test <- test_set$G3
+x_train <- train_set %>% select(-G3)
+x_test <- test_set %>% select(-G3)
+```
+
+```{r}
+
+xgb_train <- xgb.DMatrix(data = as.matrix(x_train), label = y_train)
+xgb_test <- xgb.DMatrix(data = as.matrix(x_test), label = y_test)
+
+xgb_params <- list(
+  eta = 0.04,
+  max_depth = 4,
+  subsample = 0.75,
+  colsample_bytree = 1,
+  objective = "reg:squarederror")
+
+```
+
+
+
+
+```{r}
+xgb_model <- xgb.train(
+  params = xgb_params,
+  data = xgb_train,
+  nrounds = 2000,
+  verbose = 1
+)
+```
+
+
+```{r}
+xgb_preds <- predict(xgb_model, as.matrix(x_test), reshape = TRUE)
+```
+
+
+```{r}
+rmse = caret::RMSE(y_test,xgb_preds)
+rmse
+```
+```{r}
+r2_xgb <- caret::R2(y_test, xgb_preds)
+r2_xgb
+```
+
+## With caret   
+
+```{r}
+
+xgb_trcontrol = trainControl(
+  method = "cv",
+  number = 5,  
+  allowParallel = TRUE,
+  verboseIter = FALSE,
+  returnData = FALSE
+)
+
+```
+
+```{r}
+xgbGrid <- expand.grid(nrounds = c(100,200),  # this is n_estimators in the python code above
+                       max_depth = c(10, 15, 20, 25),
+                       colsample_bytree = seq(0.5, 0.9, length.out = 5),
+                       ## The values below are default values in the sklearn-api. 
+                       eta = 0.1,
+                       gamma=0,
+                       min_child_weight = 1,
+                       subsample = 1
+                      )
+```
+
+
+```{r}
+set.seed(0) 
+
+xgb_caretmodel = train(
+  x_train, y_train,  
+  trControl = xgb_trcontrol,
+  tuneGrid = xgbGrid,
+  method = "xgbTree"
+)
+```
+
+
+```{r}
+xgb_caretmodel$bestTune
+```
+
+```{r}
+predicted = predict(xgb_caretmodel, x_test)
+residuals = y_test - predicted
+RMSE = sqrt(mean(residuals^2))
+
+cat('The root mean square error of the test data is ', round(RMSE,3),'\n')
+```
+
+
+```{r}
+y_test_mean = mean(y_test)
+
+# Calculate total sum of squares
+tss =  sum((y_test - y_test_mean)^2 )
+
+# Calculate residual sum of squares
+rss =  sum(residuals^2)
+
+# Calculate R-squared
+rsq  =  1 - (rss/tss)
+cat('The R-square of the test data is ', round(rsq,3), '\n')
+```
+
+References:  
+https://www.projectpro.io/recipes/apply-xgboost-r-for-regression  
+https://datascience-enthusiast.com/R/ML_python_R_part2.html    
+
+

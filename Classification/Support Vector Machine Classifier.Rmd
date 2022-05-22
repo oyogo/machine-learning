@@ -1,0 +1,159 @@
+---
+title: "Support Vector Machine Classifier"
+author: "Clinton"
+date: '2022-05-19'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libraries  
+e1071 package has svm function that we can use to build a support vector machine model and the caret package will help us access functions for data partitioning and model evaluation.   
+
+```{r}
+library(e1071)
+library(caret)
+library(dplyr)
+library(kernlab)
+```
+
+## Import the data   
+
+```{r}
+svc_data <- read.csv("../data/student_performance.csv")
+```
+
+## Data inspection.  
+Explore the data to know what data types features are of and if they are correct.  
+Number of features and samples. 
+
+```{r}
+str(svc_data)
+```
+
+## Transform the data. 
+* Encode the categorical variables to numeric type 
+
+```{r}
+svc_data <- svc_data %>% mutate(address = case_when(
+  address == "R" ~ 0,
+  address == "U" ~ 1
+),
+famsize = case_when(
+  famsize == "LE3" ~ 0,
+  famsize == "GT3" ~ 1
+),
+Pstatus = case_when(
+  Pstatus == "T" ~ 0,
+  Pstatus == "A" ~ 1
+),
+Mjob = case_when(
+  Mjob == "teacher" ~ 0,
+  Mjob == "at_home" ~ 1,
+  Mjob == "services" ~ 2,
+  Mjob == "other" ~ 3,
+  Mjob == "health" ~ 4
+),
+Fjob = case_when(
+  Fjob == "teacher" ~ 0,
+  Fjob == "at_home" ~ 1,
+  Fjob == "services" ~ 2,
+  Fjob == "other" ~ 3,
+  Fjob == "health" ~ 4
+),
+guardian = case_when(
+  guardian == "mother" ~ 0,
+  guardian == "father" ~ 1,
+  guardian == "other" ~ 2
+),
+schoolsup = case_when(
+  schoolsup == "yes" ~ 1,
+  schoolsup == "no" ~ 0
+),
+famsup = case_when(
+  famsup == "yes" ~ 1,
+  famsup == "no" ~ 0
+),
+paid = case_when(
+  paid == "no" ~ 0,
+  paid == "yes" ~ 1
+),
+activities = case_when(
+  activities == "no" ~ 0,
+  activities == "yes" ~ 1
+),
+nursery = case_when(
+  nursery == "no" ~ 0,
+  nursery == "yes" ~ 1
+),
+higher = case_when(
+  higher == "yes" ~ 1,
+  higher == "no" ~ 0
+),
+internet = case_when(
+  internet == "no" ~ 0,
+  internet == "yes" ~ 1
+),
+romantic = case_when(
+  romantic == "no" ~ 0,
+  romantic == "yes" ~ 1
+),
+sex = case_when(
+  sex == "F" ~ 0,
+  sex == "M" ~ 1
+),
+G3 = case_when(
+  G3 <= 10 ~ 0,
+  G3 > 10 ~ 1
+)
+) 
+```
+
+# Drop unnecessary columns  
+
+```{r}
+svc_data <- svc_data %>% select(-c("G1","reason","school","X"))  
+```
+
+
+## Data partitioning 
+We make use of createDataPartition function from caret package to split the data into training and testing set.  
+I prefer the 80% 20% partitioning. You could do 70% 30% if you like or any proportion of your liking. 
+
+```{r}
+
+set.seed(123)
+indexsvc = createDataPartition(svc_data$G3, p = .8, list = F)
+trainsvc = svc_data[indexsvm, ]
+testsvc = svc_data[-indexsvm, ]
+
+```
+
+## modelling    
+Here we define the svm model with the default parameters. The default kernel is the radial but you can change it to linear, polynomial or sigmoid.  
+
+```{r}
+modelsvc <- e1071::svm(G3 ~ ., data = trainsvc,
+                       type = 'C-classification',
+                       kernel = 'linear')
+summary(modelsvc)
+```
+
+
+## model evaluation   
+```{r}
+y_pred <- predict(modelsvc,testsvc)
+```
+
+```{r}
+table(y_pred,testsvc$G3)
+```
+
+```{r}
+correct_pred <- y_pred == testsvc$G3
+
+prop.table(table(correct_pred))
+```
+

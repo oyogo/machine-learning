@@ -1,0 +1,277 @@
+---
+title: "ElasticNet Regression - School performance"
+author: "Clinton"
+date: "4/21/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Machine learning with caret library 
+We'll use glmnet  , why : 
+the model places constraints on the coefficients which prevents overfitting.  
+
+
+```{r}
+library(dplyr)
+library(data.table)
+library(caret)
+library(caTools)
+```
+
+# Data preparation   
+This is definitely one of the most important steps in machine learning. Preparing your data by cleaning and wrangling it before modelling. As they say, which is true, trash in trash out. The quality of data significantly affects the performance of the model.  
+Having said that let's import our data and munge it abit.  
+
+```{r}
+stud_perfcoded <- fread("../data/student_performance.csv")
+```
+
+
+## encode the categorical features appropriately  
+You'll often need to encode your features (variables) into numbers as that's what machine learning models understand. Your categorical data can either be nominal or ordinal.  
+Let's begin with the nominal ones (they don't have any ordering)
+```{r}
+   
+stud_perfcoded <- stud_perfcoded %>% mutate(address = case_when(
+  address == "R" ~ 0,
+  address == "U" ~ 1
+),
+famsize = case_when(
+  famsize == "LE3" ~ 0,
+  famsize == "GT3" ~ 1
+),
+Pstatus = case_when(
+  Pstatus == "T" ~ 0,
+  Pstatus == "A" ~ 1
+),
+Mjob = case_when(
+  Mjob == "teacher" ~ 0,
+  Mjob == "at_home" ~ 1,
+  Mjob == "services" ~ 2,
+  Mjob == "other" ~ 3,
+  Mjob == "health" ~ 4
+),
+Fjob = case_when(
+  Fjob == "teacher" ~ 0,
+  Fjob == "at_home" ~ 1,
+  Fjob == "services" ~ 2,
+  Fjob == "other" ~ 3,
+  Fjob == "health" ~ 4
+),
+guardian = case_when(
+  guardian == "mother" ~ 0,
+  guardian == "father" ~ 1,
+  guardian == "other" ~ 2
+),
+schoolsup = case_when(
+  schoolsup == "yes" ~ 1,
+  schoolsup == "no" ~ 0
+),
+famsup = case_when(
+  famsup == "yes" ~ 1,
+  famsup == "no" ~ 0
+),
+paid = case_when(
+  paid == "no" ~ 0,
+  paid == "yes" ~ 1
+),
+activities = case_when(
+  activities == "no" ~ 0,
+  activities == "yes" ~ 1
+),
+nursery = case_when(
+  nursery == "no" ~ 0,
+  nursery == "yes" ~ 1
+),
+higher = case_when(
+  higher == "yes" ~ 1,
+  higher == "no" ~ 0
+),
+internet = case_when(
+  internet == "no" ~ 0,
+  internet == "yes" ~ 1
+),
+romantic = case_when(
+  romantic == "no" ~ 0,
+  romantic == "yes" ~ 1
+)
+) 
+```
+
+And then to the ordinal variables  (they have some natural ordering in them). 
+
+```{r}
+# Order for Mother's education status  
+stud_perfcoded$Medu <- ordered(stud_perfcoded$Medu, levels = 0:4, labels = c("none","primary education","5th-9th grade","secondary education","higher education"))
+# Order for Father's education status   
+stud_perfcoded$Fedu <- ordered(stud_perfcoded$Fedu, levels = 0:4, labels = c("none","primary education","5th-9th grade","secondary education","higher education"))
+# home to school travel time 
+stud_perfcoded$traveltime <- ordered(stud_perfcoded$traveltime, levels = 1:4, labels = c("<15mins","15-30mins","30mins-1hr",">1hr")) 
+# weekly study time  
+stud_perfcoded$studytime <- ordered(stud_perfcoded$studytime, levels = 1:4, labels = c("<2hrs","2-5hrs","5-10hrs",">10hrs")) 
+# order values for quality of family relationship
+stud_perfcoded$famrel <- ordered(stud_perfcoded$famrel, levels = 1:5, labels = c("very bad","bad","not sure","good","excellent")) 
+# order free time after school 
+stud_perfcoded$freetime <- ordered(stud_perfcoded$freetime, levels = 1:5, labels = c("very low","low","not sure","high","very high")) 
+# order go out with friends 
+stud_perfcoded$goout <- ordered(stud_perfcoded$goout, levels = 1:5, labels = c("very low","low","not sure","high","very high"))
+# order workday alcohol consumption 
+stud_perfcoded$Dalc <- ordered(stud_perfcoded$Dalc, levels = 1:5, labels = c("very low","low","not sure","high","very high"))
+
+# order weekend alcohol consumption 
+stud_perfcoded$Walc <- ordered(stud_perfcoded$Walc, levels = 1:5, labels = c("very low","low","not sure","high","very high")) 
+
+# order health status
+stud_perfcoded$health <- ordered(stud_perfcoded$health, levels = 1:5, labels = c("very low","low","not sure","high","very high"))
+
+```
+
+
+## drop variables 
+ * The school variable groups the students into either of the two schools from which data was collected, we don't need it. 
+ * V1 is an ID column resulting from data importation, definitely its not useful.   
+ * G2 is the second term grades, its highly correlated with G1. One of the assumptions of Regression is that the predictor variables should not be highly correlated. As you can see the correlation coefficient is about 0.86 which is very high.  
+ 
+```{r}
+# calculating the correlation coefficient. Its a very high figure.
+cor(stud_perf$G1,stud_perf$G2)
+```
+ 
+```{r}
+stud_perf <- stud_perfcoded %>% select(-c("reason","school","V1","G2"))
+
+write.csv(stud_perf, "../data/stud_perf_processed.csv")
+```
+
+```{r}
+stud_perf <- read.csv("../data/student_performance.csv")
+```
+
+# encoding categorical variables 
+
+```{r}
+stud_perf<- stud_perf %>% mutate(address = case_when(
+  address == "R" ~ 0,
+  address == "U" ~ 1
+),
+famsize = case_when(
+  famsize == "LE3" ~ 0,
+  famsize == "GT3" ~ 1
+),
+Pstatus = case_when(
+  Pstatus == "T" ~ 0,
+  Pstatus == "A" ~ 1
+),
+Mjob = case_when(
+  Mjob == "teacher" ~ 0,
+  Mjob == "at_home" ~ 1,
+  Mjob == "services" ~ 2,
+  Mjob == "other" ~ 3,
+  Mjob == "health" ~ 4
+),
+Fjob = case_when(
+  Fjob == "teacher" ~ 0,
+  Fjob == "at_home" ~ 1,
+  Fjob == "services" ~ 2,
+  Fjob == "other" ~ 3,
+  Fjob == "health" ~ 4
+),
+guardian = case_when(
+  guardian == "mother" ~ 0,
+  guardian == "father" ~ 1,
+  guardian == "other" ~ 2
+),
+schoolsup = case_when(
+  schoolsup == "yes" ~ 1,
+  schoolsup == "no" ~ 0
+),
+famsup = case_when(
+  famsup == "yes" ~ 1,
+  famsup == "no" ~ 0
+),
+paid = case_when(
+  paid == "no" ~ 0,
+  paid == "yes" ~ 1
+),
+activities = case_when(
+  activities == "no" ~ 0,
+  activities == "yes" ~ 1
+),
+nursery = case_when(
+  nursery == "no" ~ 0,
+  nursery == "yes" ~ 1
+),
+higher = case_when(
+  higher == "yes" ~ 1,
+  higher == "no" ~ 0
+),
+internet = case_when(
+  internet == "no" ~ 0,
+  internet == "yes" ~ 1
+),
+romantic = case_when(
+  romantic == "no" ~ 0,
+  romantic == "yes" ~ 1
+),
+sex = case_when(
+  sex == "F" ~ 0,
+  sex == "M" ~ 1
+)
+) 
+```
+
+drop unnecessary variables 
+
+```{r}
+stud_perf <- stud_perf %>% select(-c(X,school,reason,G2))
+```
+
+
+## Data partitioning  
+
+The next step would have been to train and make prediction on the entire data but then the model wouldn't be in a good position to generalize well to data it has not seen. To address that the practice of splitting the data into training and testing sets ensures the model trains on one split of data and then we use a different split to evaluate how the model will perform on data it has not seen.  
+One more thing, the data split is not 50/50 by the way, nay, mostly you'll have the data split into about 80/20 or 70/30, just about there, whereby the larger percentage goes to the training set. The idea is to have enough data for the model to train on so that it gets a good understanding of the data. 
+
+```{r}
+# caret library has a function called createDataPartition the we can use to split the data. 
+# There are other alternatives  
+set.seed(123) 
+
+index <- createDataPartition(y=stud_perf$G3, p=0.8, list = FALSE)
+training <- stud_perf[index,]
+test <- stud_perf[-index,]
+
+```
+
+
+```{r}
+
+param_grid <- expand.grid(alpha=seq(0.2, 1, by=0.2), 
+                          lambda=exp(seq(-3, 2,length=100)))  
+
+elmodel <- train(G3 ~ ., stud_perf, 
+                 method="glmnet", 
+                 preProcess = c("range"), 
+                 tuneGrid=param_grid, 
+                 trControl=trainControl(method="cv", number=10), 
+                 metric="Rsquared")
+
+```
+
+
+Which combinations of alpha and lambda yields the best Rsquared?  
+
+```{r}
+best <- which.max(elmodel$results$Rsquared)
+elmodel$results[best, ]
+```
+
+References:  
+
+http://www.sthda.com/english/articles/37-model-selection-essentials-in-r/153-penalized-regression-essentials-ridge-lasso-elastic-net/   
+
+
+

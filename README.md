@@ -1,1 +1,2 @@
-# machine-learning
+# Machine learning   
+This repository contains scripts for regression and classification algorithms I've explored using various datasets. I've organized them into classification and regression categories so far but I'll be adding clustering soon !
