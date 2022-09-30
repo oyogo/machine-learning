@@ -1,0 +1,10 @@
+{
+    "json.schemas": [
+    {
+        "python.pythonPath": [
+            "/.venvs/mlpyenv/bin/python"
+        ],
+        "url": "schemaURL"
+    }
+    ]
+}

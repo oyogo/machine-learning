@@ -22,7 +22,7 @@ library(kernlab)
 ## Import the data   
 
 ```{r}
-svc_data <- read.csv("../data/student_performance.csv")
+svc_data <- read.csv("./../data/student_performance.csv")
 ```
 
 ## Data inspection.  
